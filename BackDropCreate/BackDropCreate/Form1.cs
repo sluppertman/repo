@@ -192,8 +192,8 @@ namespace BackDropCreate
             Bitmap resizedBitmap = this.resizeBitmap(fullSizeKnLoaderBackdrop, 256, 192);
             Bitmap spectrumNextColorBitmap = this.convertToSpectrumNextColors(resizedBitmap);
 
-            fullSizeKnLoaderBackdrop.Save("Output\\" + Path.GetFileNameWithoutExtension(file) + " Full.bmp", ImageFormat.Bmp);
-            resizedBitmap.Save("Output\\" + Path.GetFileNameWithoutExtension(file) + " Size.bmp", ImageFormat.Bmp);
+            //fullSizeKnLoaderBackdrop.Save("Output\\" + Path.GetFileNameWithoutExtension(file) + " Full.bmp", ImageFormat.Bmp);
+            //resizedBitmap.Save("Output\\" + Path.GetFileNameWithoutExtension(file) + " Size.bmp", ImageFormat.Bmp);
             spectrumNextColorBitmap.Save("Output\\" + Path.GetFileNameWithoutExtension(file) + " Back.bmp", ImageFormat.Bmp);
         }
 
