@@ -13,7 +13,7 @@ using System.Windows.Forms;
 
 namespace BackDropCreate
 {
-    public partial class Form1 : Form
+    public partial class BackDropCreate : Form
     {
         private static readonly byte[,] NEXT_PALETTE = new byte[256, 3] {
 /* 000 */   {0, 0, 0}, {0, 0, 109}, {0, 0, 182}, {0, 0, 255}, {0, 36, 0}, {0, 36, 109}, {0, 36, 182}, {0, 36, 255},
@@ -53,48 +53,122 @@ namespace BackDropCreate
 /* 000 */   {0, 0, 0}, {1, 0, 206}, {207, 1, 0}, {207, 1, 206}, {0, 207, 21}, {1, 207, 207}, {207, 207, 21}, {207, 207, 207},
 /* 008 */   {0, 0, 0}, {2, 0, 253}, {255, 2, 1}, {255, 2, 253}, {0, 255, 28}, {2, 255, 255}, {255, 255, 29}, {255, 255, 255}
         };
+
+        private static readonly double SCREEN_WIDTH = 256;
+        private static readonly double SCREEN_HEIGHT = 192;
+        private static readonly double MAX_WIDTH = 160;
+        private static readonly double MAX_HEIGHT = SCREEN_HEIGHT;
+
         private int[] tempColorMapCache = Enumerable.Repeat(-1, 16777216).ToArray();
         private byte[] colorMapCache = null;
 
-        public Form1()
+        public BackDropCreate()
         {
             InitializeComponent();
         }
 
+        //*****************************************************************************************************/
+        // knLoader Backdrops methods
+        //*****************************************************************************************************/
+
         private Bitmap createFullSizeKnLoaderBackdrop(double width, double height, Image image)
         {
-            Console.WriteLine(height);
-            Console.WriteLine(image.Width);
-            Console.WriteLine(image.Height);
             Bitmap resultBitmap;
             if (height == 0)
-                resultBitmap = new Bitmap((int)(2 * width), (int)(192 * (width / 128)), PixelFormat.Format24bppRgb);
+                resultBitmap = new Bitmap((int)((SCREEN_WIDTH / MAX_WIDTH) * width), (int)(SCREEN_HEIGHT * (width / MAX_WIDTH)), PixelFormat.Format24bppRgb);
             else
-                resultBitmap = new Bitmap((int)(256 * (height / 192)), (int)height, PixelFormat.Format24bppRgb);
-            Console.WriteLine(resultBitmap.Width);
-            Console.WriteLine(resultBitmap.Height);
-            float halfWidth = resultBitmap.Width / 2;
+                resultBitmap = new Bitmap((int)(SCREEN_WIDTH * (height / MAX_HEIGHT)), (int)((SCREEN_HEIGHT / MAX_HEIGHT) * height), PixelFormat.Format24bppRgb);
+            double availableWidth = resultBitmap.Width * (MAX_WIDTH / SCREEN_WIDTH);
+
             Graphics graphics = Graphics.FromImage(resultBitmap);
             graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            Console.WriteLine();
-            graphics.DrawImage(image, new Rectangle((int)(halfWidth + (halfWidth - image.Width) / 2), (int)((resultBitmap.Height - image.Height) / 2), image.Width, image.Height));
+            graphics.DrawImage(image, new Rectangle((int)((resultBitmap.Width - availableWidth) + ((availableWidth - image.Width) / 2)), (int)((resultBitmap.Height - image.Height) / 2), image.Width, image.Height));
             graphics.Dispose();
+
             return resultBitmap;
         }
+
+        private void CreateSpectrumNextKnLoaderBackdop(double width, double height, Image image, String file)
+        {
+            Bitmap fullSizeKnLoaderBackdrop = this.createFullSizeKnLoaderBackdrop(width, height, image);
+            Bitmap resizedBitmap = this.resizeBitmap(fullSizeKnLoaderBackdrop, 256, 192);
+            Bitmap spectrumNextColorBitmap = this.convertToSpectrumNextColors(resizedBitmap);
+
+            spectrumNextColorBitmap.Save("Output\\" + Path.GetFileNameWithoutExtension(file) + " Back.bmp", ImageFormat.Bmp);
+
+            spectrumNextColorBitmap.Dispose();
+            resizedBitmap.Dispose();
+            fullSizeKnLoaderBackdrop.Dispose();
+        }
+
+        private void ProcessFile(String file)
+        {
+            Image image = Bitmap.FromFile(file);
+            if (Convert.ToDouble(image.Height) / Convert.ToDouble(image.Width) >= MAX_HEIGHT / MAX_WIDTH)
+                this.CreateSpectrumNextKnLoaderBackdop(0, image.Height, image, file);
+            else
+                this.CreateSpectrumNextKnLoaderBackdop(image.Width, 0, image, file);
+            image.Dispose();
+        }
+
+        private void ScanDir(String dir)
+        {
+            Directory.CreateDirectory("Output");
+            String[] files = Directory.GetFiles(dir, "*.jpg");
+            foreach (String file in files)
+                this.ProcessFile(file);
+            files = Directory.GetFiles(dir, "*.bmp");
+            foreach (String file in files)
+                this.ProcessFile(file);
+            files = Directory.GetFiles(dir, "*.png");
+            foreach (String file in files)
+                this.ProcessFile(file);
+            files = Directory.GetFiles(dir, "*.scr");
+            foreach (String file in files)
+            {
+                Bitmap scrBitmap = this.ConvertScrToBitemap(file);
+                this.CreateSpectrumNextKnLoaderBackdop(scrBitmap.Width, 0, scrBitmap, file);
+                scrBitmap.Dispose();
+            }
+        }
+
+        //*****************************************************************************************************/
+        // General bitmap methods
+        //*****************************************************************************************************/
 
         private Bitmap resizeBitmap(Bitmap bitmap, int width, int height)
         {
             Bitmap resultBitmap = new Bitmap(width, height, bitmap.PixelFormat);
             Graphics graphics = Graphics.FromImage(resultBitmap);
+
             graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
             graphics.DrawImage(bitmap, 0, 0, width, height);
             graphics.Dispose();
+
+            return resultBitmap;
+        }
+
+        private Bitmap convertTo24bppBitmap(Bitmap bitmap)
+        {
+            Bitmap resultBitmap = new Bitmap(bitmap.Width, bitmap.Height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            Graphics graphics = Graphics.FromImage(resultBitmap);
+
+            graphics.DrawImage(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
+            graphics.Dispose();
+
             return resultBitmap;
         }
 
         private Bitmap convertToSpectrumNextColors(Bitmap bitmap)
         {
-            // Create bitmap with Spectrum Next palette
+            Bitmap bitmap24bpp = null;
+            if (bitmap.PixelFormat != PixelFormat.Format24bppRgb)
+            {
+                bitmap24bpp = convertTo24bppBitmap(bitmap);
+                bitmap = bitmap24bpp;
+            }
+
+            // Create 8bbp indexed bitmap with SpecNext colors 
 
             Bitmap resultBitmap = new Bitmap(bitmap.Width, bitmap.Height, PixelFormat.Format8bppIndexed);
             ColorPalette palette = resultBitmap.Palette;
@@ -148,8 +222,12 @@ namespace BackDropCreate
                         outputPtr[row * outputStride + outputColumn] = (byte)colorMapIndex;
                     }
             }
+
             bitmap.UnlockBits(bmpData);
             resultBitmap.UnlockBits(outputData);
+            if (bitmap24bpp != null)
+                bitmap24bpp.Dispose();
+
             return resultBitmap;
         }
 
@@ -186,18 +264,7 @@ namespace BackDropCreate
             File.WriteAllBytes("ColorMapCache.bin", colorMapCache);
         }
 
-        private void CreateSpectrumNextKnLoaderBackdop(double width, double height, Image image, String file)
-        {
-            Bitmap fullSizeKnLoaderBackdrop = this.createFullSizeKnLoaderBackdrop(width, height, image);
-            Bitmap resizedBitmap = this.resizeBitmap(fullSizeKnLoaderBackdrop, 256, 192);
-            Bitmap spectrumNextColorBitmap = this.convertToSpectrumNextColors(resizedBitmap);
-
-            //fullSizeKnLoaderBackdrop.Save("Output\\" + Path.GetFileNameWithoutExtension(file) + " Full.bmp", ImageFormat.Bmp);
-            //resizedBitmap.Save("Output\\" + Path.GetFileNameWithoutExtension(file) + " Size.bmp", ImageFormat.Bmp);
-            spectrumNextColorBitmap.Save("Output\\" + Path.GetFileNameWithoutExtension(file) + " Back.bmp", ImageFormat.Bmp);
-        }
-
-        private Bitmap ConvertScrToBmp(String file)
+        private Bitmap ConvertScrToBitemap(String file)
         {
             byte[] videoRam = File.ReadAllBytes(file);
             Bitmap resultBitmap = new Bitmap(256, 192, PixelFormat.Format24bppRgb);
@@ -243,36 +310,11 @@ namespace BackDropCreate
             return resultBitmap;
         }
 
-        private void ProcessFile(String file)
-        {
-            Image image = Bitmap.FromFile(file);
-            if (Convert.ToDouble(image.Height) / image.Width >= 192d / 128)
-                this.CreateSpectrumNextKnLoaderBackdop(0, image.Height, image, file);
-            else
-                this.CreateSpectrumNextKnLoaderBackdop(image.Width, 0, image, file);
-        }
+        //*****************************************************************************************************/
+        // UI events
+        //*****************************************************************************************************/
 
-        private void ScanDir(String dir)
-        {
-            Directory.CreateDirectory("Output");
-            String[] files = Directory.GetFiles(dir, "*.jpg");
-            foreach (String file in files)
-                this.ProcessFile(file);
-            files = Directory.GetFiles(dir, "*.bmp");
-            foreach (String file in files)
-                this.ProcessFile(file);
-            files = Directory.GetFiles(dir, "*.png");
-            foreach (String file in files)
-                this.ProcessFile(file);
-            files = Directory.GetFiles(dir, "*.scr");
-            foreach (String file in files)
-            {
-                Bitmap scrBitmap = ConvertScrToBmp(file);
-                this.CreateSpectrumNextKnLoaderBackdop(256, 0, scrBitmap, file);
-            }
-        }
-
-        private void button1_Click(object sender, EventArgs e)
+        private void btnCreateBackdrops_Click(object sender, EventArgs e)
         {
             if (File.Exists(Path.GetDirectoryName(Application.ExecutablePath) + "\\ColorMapCache.bin"))
                 this.colorMapCache = File.ReadAllBytes(Path.GetDirectoryName(Application.ExecutablePath) + "\\ColorMapCache.bin");
@@ -280,7 +322,7 @@ namespace BackDropCreate
             Close();
         }
 
-        private void button2_Click(object sender, EventArgs e)
+        private void btnCreateCache_Click(object sender, EventArgs e)
         {
             this.createColorMapCache();
         }
